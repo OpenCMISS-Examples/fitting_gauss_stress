@@ -53,7 +53,7 @@ gfx modify g_element CantileverRegion lines coordinate Deformed material red
 #gfx modify g_element CantileverRegion node_points coordinate Deformed glyph arrow_solid general size "1.0*1.01*1.0" centre 0,0,0 font default orientation Traction select_on material default data TractionMagnitude scale_factors "0.05*0.01*0.00" selected_material default_selected spectrum TractionSpectrum
 
 #Display stress field on deformed surface
-gfx modify g_element CantileverRegion surfaces coordinate Deformed exterior tessellation default LOCAL native_discretization NONE select_on data StressZZ spectrum StressSpectrum selected_material default_selected render_shaded
+gfx modify g_element CantileverRegion surfaces coordinate Deformed exterior tessellation default LOCAL native_discretization NONE select_on data StressYY spectrum StressSpectrum selected_material default_selected render_shaded
 
 #Write out image
 gfx print window 1 jpg file "FittedStress.jpg" height 1000 width 1500
