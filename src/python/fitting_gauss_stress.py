@@ -324,7 +324,7 @@ fittingEquationsSetField = iron.Field()
 fittingEquationsSet = iron.EquationsSet()
 fittingEquationsSetSpecification = [iron.EquationsSetClasses.FITTING,
                                     iron.EquationsSetTypes.GAUSS_FITTING_EQUATION,
-                                    iron.EquationsSetSubtypes.GAUSS_POINT_FITTING,
+                                    iron.EquationsSetSubtypes.GENERALISED_GAUSS_FITTING,
                                     iron.EquationsSetFittingSmoothingTypes.SOBOLEV_VALUE]
 fittingEquationsSet.CreateStart(fittingEquationsSetUserNumber,region,geometricField,
                                 fittingEquationsSetSpecification,fittingEquationsSetFieldUserNumber,
@@ -337,7 +337,6 @@ fittingEquationsSet.DependentCreateStart(fittingDependentFieldUserNumber,fitting
 fittingDependentField.VariableLabelSet(iron.FieldVariableTypes.U,"FittedStress")
 # Set the number of components to 2
 fittingDependentField.NumberOfComponentsSet(iron.FieldVariableTypes.U,6)
-fittingDependentField.NumberOfComponentsSet(iron.FieldVariableTypes.DELUDELN,6)
 # Set the field variables to be triquadratic Lagrange
 fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,1)
 fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,1)
@@ -345,12 +344,6 @@ fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,1)
 fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,4,1)
 fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,5,1)
 fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,6,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,1,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,2,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,3,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,4,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,5,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,6,1)
 # Finish creating the fitting dependent field
 fittingEquationsSet.DependentCreateFinish()
 
@@ -453,7 +446,7 @@ elasticitySolverEquations.BoundaryConditionsCreateFinish()
 
 # Create fitting problem
 fittingProblemSpecification = [iron.ProblemClasses.FITTING,
-                               iron.ProblemTypes.DATA_FITTING,
+                               iron.ProblemTypes.FITTING,
                                iron.ProblemSubtypes.STATIC_FITTING]
 fittingProblem = iron.Problem()
 fittingProblem.CreateStart(fittingProblemUserNumber,iron.Context,fittingProblemSpecification)
