@@ -72,6 +72,7 @@ numberOfLoadIncrements = 1
 
 # Should not need to change anything below here
 
+contextUserNumber = 1
 coordinateSystemUserNumber = 1
 regionUserNumber = 1
 basisUserNumber = 1
@@ -126,12 +127,15 @@ numberOfYNodes = numberOfGlobalYElements*(numberOfNodesXi-1)+1
 numberOfZNodes = numberOfGlobalZElements*(numberOfNodesXi-1)+1
 numberOfNodes = numberOfXNodes*numberOfYNodes*numberOfZNodes
     
+context = iron.Context()
+context.Create(contextUserNumber)
+
 worldRegion = iron.Region()
-iron.Context.WorldRegionGet(worldRegion)
+context.WorldRegionGet(worldRegion)
 
 # Get the number of computational nodes and this computational node number
 computationEnvironment = iron.ComputationEnvironment()
-iron.Context.ComputationEnvironmentGet(computationEnvironment)
+context.ComputationEnvironmentGet(computationEnvironment)
 
 worldWorkGroup = iron.WorkGroup()
 computationEnvironment.WorldWorkGroupGet(worldWorkGroup)
@@ -140,7 +144,7 @@ computationalNodeNumber = worldWorkGroup.GroupNodeNumberGet()
 
 # Create a 3D rectangular cartesian coordinate system
 coordinateSystem = iron.CoordinateSystem()
-coordinateSystem.CreateStart(coordinateSystemUserNumber,iron.Context)
+coordinateSystem.CreateStart(coordinateSystemUserNumber,context)
 coordinateSystem.DimensionSet(3)
 coordinateSystem.CreateFinish()
 
@@ -153,7 +157,7 @@ region.CreateFinish()
 
 # Define quadratic basis
 quadraticBasis = iron.Basis()
-quadraticBasis.CreateStart(basisUserNumber,iron.Context)
+quadraticBasis.CreateStart(basisUserNumber,context)
 quadraticBasis.type = iron.BasisTypes.LAGRANGE_HERMITE_TP
 quadraticBasis.numberOfXi = 3
 quadraticBasis.interpolationXi = [iron.BasisInterpolationSpecifications.QUADRATIC_LAGRANGE]*3
@@ -162,7 +166,7 @@ quadraticBasis.CreateFinish()
 
 # Define linear basis
 linearBasis = iron.Basis()
-linearBasis.CreateStart(pressureBasisUserNumber,iron.Context)
+linearBasis.CreateStart(pressureBasisUserNumber,context)
 linearBasis.type = iron.BasisTypes.LAGRANGE_HERMITE_TP
 linearBasis.numberOfXi = 3
 linearBasis.interpolationXi = [iron.BasisInterpolationSpecifications.LINEAR_LAGRANGE]*3
@@ -384,7 +388,7 @@ elasticityProblem = iron.Problem()
 elasticityProblemSpecification = [iron.ProblemClasses.ELASTICITY,
                                   iron.ProblemTypes.FINITE_ELASTICITY,
                                   iron.ProblemSubtypes.STATIC_FINITE_ELASTICITY]
-elasticityProblem.CreateStart(elasticityProblemUserNumber,iron.Context,elasticityProblemSpecification)
+elasticityProblem.CreateStart(elasticityProblemUserNumber,context,elasticityProblemSpecification)
 elasticityProblem.CreateFinish()
 
 # Create the elasticity problem control loop
@@ -449,7 +453,7 @@ fittingProblemSpecification = [iron.ProblemClasses.FITTING,
                                iron.ProblemTypes.FITTING,
                                iron.ProblemSubtypes.STATIC_FITTING]
 fittingProblem = iron.Problem()
-fittingProblem.CreateStart(fittingProblemUserNumber,iron.Context,fittingProblemSpecification)
+fittingProblem.CreateStart(fittingProblemUserNumber,context,fittingProblemSpecification)
 fittingProblem.CreateFinish()
 
 # Create control loops
