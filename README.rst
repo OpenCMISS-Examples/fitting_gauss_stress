@@ -14,12 +14,12 @@ Running the example
 To run the example:
 
   cd ./fitting_gauss_stress/src/python
-  source  /path/to/opencmisslibs/install/.../.../virtualenvironments/oclibs_pyXY_release/bin/activate
+  source  /path/to/opencmiss/install/.../.../virtualenvironments/oclibs_pyXY_release/bin/activate
   python fitting_gauss_stress.py
   
   Note: If the above fails, try the following.
   cd ./fitting_gauss_stress/src/python
-  PYTHONPATH="/path/to/opencmisslibs/install/.../.../Release/opencmiss.iron" python fitting_gauss_stress.py  
+  PYTHONPATH="/path/to/opencmiss/install/.../.../Release/opencmiss" python fitting_gauss_stress.py  
 
 The example also takes a number of optional arguments, namely either
 
