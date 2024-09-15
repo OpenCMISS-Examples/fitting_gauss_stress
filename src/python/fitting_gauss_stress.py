@@ -48,6 +48,12 @@ import sys, os
 # Intialise OpenCMISS-Iron
 from opencmiss.iron import iron
 
+ELEMENT_CONSTANT = 0
+LINEAR_LAGRANGE = 1
+QUADRATIC_LAGRANGE = 2
+CUBIC_LAGRANGE = 3
+CUBIC_HERMITE = 4
+
 # Set problem parameters
 
 # Cantilever dimensions
@@ -55,27 +61,37 @@ width = 10.0
 length = 30.0
 height = 10.0
 
+# Loading
 force = -0.3
 
+# Material properties
 mooneyRivlin1 = 2.0
 mooneyRivlin2 = 2.0
 density = 9.0e-4
 
-#pInit = -8.0 # Initial hydrostatic pressure
+#pInit = -mooneyRivilin1 # Initial hydrostatic pressure
 pInit = 0.0 # Initial hydrostatic pressure
 
 pRef = pInit # Reference hydrostatic pressure
 
-numberOfGaussXi = 3
-
 numberOfLoadIncrements = 1
+
+# Interpolation
+#geometricInterpolation = CUBIC_HERMITE
+#geometricInterpolation = LINEAR_LAGRANGE
+geometricInterpolation = QUADRATIC_LAGRANGE
+fibreInterpolation = geometricInterpolation
+pressureInterpolation = ELEMENT_CONSTANT
+fittingInterpolation = CUBIC_HERMITE
 
 # Should not need to change anything below here
 
 coordinateSystemUserNumber = 1
 regionUserNumber = 1
-basisUserNumber = 1
-pressureBasisUserNumber = 2
+linearLagrangeBasisUserNumber = 1
+quadraticLagrangeBasisUserNumber = 2
+cubicLagrangeBasisUserNumber = 3
+cubicHermiteBasisUserNumber = 4
 generatedMeshUserNumber = 1
 meshUserNumber = 1
 decompositionUserNumber = 1
@@ -92,8 +108,6 @@ fittingEquationsSetFieldUserNumber = 9
 fittingDependentFieldUserNumber = 10
 fittingMaterialsFieldUserNumber = 11
 fittingProblemUserNumber = 2
-
-numberOfGauss = pow(numberOfGaussXi,3)
 
 if len(sys.argv) > 1:
     if len(sys.argv) > 6:
@@ -119,7 +133,74 @@ else:
     tau = 0.001
     kappa = 0.00005
 
-numberOfNodesXi = 3
+haveLinearLagrange = False
+haveQuadraticLagrange = False
+haveCubicLagrange = False
+haveCubicHermite = False
+if (geometricInterpolation == LINEAR_LAGRANGE):
+    haveLinearLagrange = True
+    numberOfNodesXi = 2
+    numberOfGaussXi = 2
+    if(pressureInterpolation != ELEMENT_CONSTANT):
+        sys.exit('Invalid pressure interpolation for linear Lagrange geometric interpolation')
+elif (geometricInterpolation == QUADRATIC_LAGRANGE):
+    haveQuadraticLagrange = True
+    numberOfNodesXi = 3
+    numberOfGaussXi = 3
+    if(pressureInterpolation == ELEMENT_CONSTANT):
+        a = 1
+    elif (pressureInterpolation == LINEAR_LAGRANGE):
+        haveLinearLagrange = True
+    else:
+        sys.exit('Invalid pressure interpolation for quadratic Lagrange geometric interpolation')
+elif (geometricInterpolation == CUBIC_LAGRANGE):
+    haveCubicLagrange = True
+    numberOfNodesXi = 4
+    numberOfGaussXi = 4
+    if(pressureInterpolation == ELEMENT_CONSTANT):
+        a
+    elif (pressureInterpolation == LINEAR_LAGRANGE):
+        haveLinearLagrange = True        
+    elif (pressureInterpolation == QUADRATIC_LAGRANGE):
+        haveQuadraticLagrange = True
+    else:
+        sys.exit('Invalid pressure interpolation for cubic Lagrange geometric interpolation')
+elif (geometricInterpolation == CUBIC_HERMITE):
+    haveCubicHermite = True
+    numberOfGaussXi = 4
+    if(pressureInterpolation == ELEMENT_CONSTANT):
+        numberOfNodesXi = 2
+    elif (pressureInterpolation == LINEAR_LAGRANGE):
+        haveLinearLagrange = True        
+        numberOfNodesXi = 2
+    elif (pressureInterpolation == QUADRATIC_LAGRANGE):
+        haveQuadraticLagrange = True
+        numberOfNodesXi = 3
+    elif (pressureInterpolation == CUBIC_LAGRANGE):
+        haveCubicLagrange = True
+        numberOfNodesXi = 4
+    else:
+        sys.exit('Invalid pressure interpolation for cubic Hermite geometric interpolation')
+else:
+    sys.exit('Invalid geometric interpolation')
+    
+if (fittingInterpolation == LINEAR_LAGRANGE):
+    haveLinearLagrange = True
+elif (fittingInterpolation == QUADRATIC_LAGRANGE):
+    haveQuadraticLagrange = True
+    if (numberOfNodesXi<3):
+        numberOfNodesXi = 3
+elif (fittingInterpolation == CUBIC_LAGRANGE):
+    haveCubicLagrange = True
+    numberOfNodesXi = 4
+elif (fittingInterpolation == CUBIC_HERMITE):
+    haveCubicHermite = True
+else:
+    sys.exit('Invalid fitting interpolation')
+    
+numberOfGauss = pow(numberOfGaussXi,3)
+
+numberOfElements = numberOfGlobalXElements*numberOfGlobalYElements*numberOfGlobalZElements
 numberOfXNodes = numberOfGlobalXElements*(numberOfNodesXi-1)+1
 numberOfYNodes = numberOfGlobalYElements*(numberOfNodesXi-1)+1
 numberOfZNodes = numberOfGlobalZElements*(numberOfNodesXi-1)+1
@@ -139,34 +220,145 @@ coordinateSystem.CreateFinish()
 region = iron.Region()
 region.CreateStart(regionUserNumber,iron.WorldRegion)
 region.LabelSet("CantileverRegion")
-region.coordinateSystem = coordinateSystem
+region.CoordinateSystemSet(coordinateSystem)
 region.CreateFinish()
 
-# Define quadratic basis
-quadraticBasis = iron.Basis()
-quadraticBasis.CreateStart(basisUserNumber)
-quadraticBasis.type = iron.BasisTypes.LAGRANGE_HERMITE_TP
-quadraticBasis.numberOfXi = 3
-quadraticBasis.interpolationXi = [iron.BasisInterpolationSpecifications.QUADRATIC_LAGRANGE]*3
-quadraticBasis.quadratureNumberOfGaussXi = [numberOfGaussXi]*3
-quadraticBasis.CreateFinish()
+numberOfMeshComponents = 0
+linearLagrangeMeshComponent = 0
+quadraticLagrangeMeshComponent = 0
+cubicLagrangeMeshComponent = 0
+cubicHermiteMeshComponent = 0
+if (haveLinearLagrange):
+    # Define linear Lagrange basis
+    linearLagrangeBasis = iron.Basis()
+    linearLagrangeBasis.CreateStart(linearLagrangeBasisUserNumber)
+    linearLagrangeBasis.TypeSet(iron.BasisTypes.LAGRANGE_HERMITE_TP)
+    linearLagrangeBasis.NumberOfXiSet(3)
+    linearLagrangeBasis.InterpolationXiSet([iron.BasisInterpolationSpecifications.LINEAR_LAGRANGE]*3)
+    linearLagrangeBasis.QuadratureNumberOfGaussXiSet([numberOfGaussXi]*3)
+    linearLagrangeBasis.CreateFinish()
+    numberOfMeshComponents = numberOfMeshComponents + 1
+    linearLagrangeMeshComponent = numberOfMeshComponents
 
-# Define linear basis
-linearBasis = iron.Basis()
-linearBasis.CreateStart(pressureBasisUserNumber)
-linearBasis.type = iron.BasisTypes.LAGRANGE_HERMITE_TP
-linearBasis.numberOfXi = 3
-linearBasis.interpolationXi = [iron.BasisInterpolationSpecifications.LINEAR_LAGRANGE]*3
-linearBasis.quadratureNumberOfGaussXi = [numberOfGaussXi]*3
-linearBasis.CreateFinish()
+if (haveQuadraticLagrange):
+    # Define quadratic basis
+    quadraticLagrangeBasis = iron.Basis()
+    quadraticLagrangeBasis.CreateStart(quadraticLagrangeBasisUserNumber)
+    quadraticLagrangeBasis.TypeSet(iron.BasisTypes.LAGRANGE_HERMITE_TP)
+    quadraticLagrangeBasis.NumberOfXiSet(3)
+    quadraticLagrangeBasis.InterpolationXiSet([iron.BasisInterpolationSpecifications.QUADRATIC_LAGRANGE]*3)
+    quadraticLagrangeBasis.QuadratureNumberOfGaussXiSet([numberOfGaussXi]*3)
+    quadraticLagrangeBasis.CreateFinish()
+    numberOfMeshComponents = numberOfMeshComponents + 1
+    quadraticLagrangeMeshComponent = numberOfMeshComponents
+    
+if (haveCubicLagrange):
+    # Define cubic Lagrange basis
+    cubicLagrangeBasis = iron.Basis()
+    cubicLagrangeBasis.CreateStart(cubicLagrangeBasisUserNumber)
+    cubicLagrangeBasis.TypeSet(iron.BasisTypes.LAGRANGE_HERMITE_TP)
+    cubicLagrangeBasis.NumberOfXiSet(3)
+    cubicLagrangeBasis.InterpolationXiSet([iron.BasisInterpolationSpecifications.CUBIC_LAGRANGE]*3)
+    cubicLagrangeBasis.QuadratureNumberOfGaussXiSet([numberOfGaussXi]*3)
+    cubicLagrangeBasis.CreateFinish()
+    numberOfMeshComponents = numberOfMeshComponents + 1
+    cubicLagrangeMeshComponent = numberOfMeshComponents
+    
+if (haveCubicHermite):    
+    # Define cubic Hermite basis
+    cubicHermiteBasis = iron.Basis()
+    cubicHermiteBasis.CreateStart(cubicHermiteBasisUserNumber)
+    cubicHermiteBasis.TypeSet(iron.BasisTypes.LAGRANGE_HERMITE_TP)
+    cubicHermiteBasis.NumberOfXiSet(3)
+    cubicHermiteBasis.InterpolationXiSet([iron.BasisInterpolationSpecifications.CUBIC_HERMITE]*3)
+    cubicHermiteBasis.QuadratureNumberOfGaussXiSet([numberOfGaussXi]*3)
+    cubicHermiteBasis.CreateFinish()
+    numberOfMeshComponents = numberOfMeshComponents + 1
+    cubicHermiteMeshComponent = numberOfMeshComponents
 
+geometricMeshComponent = 0    
+if (geometricInterpolation == LINEAR_LAGRANGE):
+    geometricMeshComponent = linearLagrangeMeshComponent
+elif (geometricInterpolation == QUADRATIC_LAGRANGE):
+    geometricMeshComponent = quadraticLagrangeMeshComponent
+elif (geometricInterpolation == CUBIC_LAGRANGE):
+    geometricMeshComponent = cubicLagrangeMeshComponent
+elif (geometricInterpolation == CUBIC_HERMITE):
+    geometricMeshComponent = cubicHermiteMeshComponent
+
+fibreMeshComponent = geometricMeshComponent
+
+pressureMeshComponent = 0    
+if (pressureInterpolation == ELEMENT_CONSTANT):
+    pressureMeshComponent = geometricMeshComponent
+if (pressureInterpolation == LINEAR_LAGRANGE):
+    pressureMeshComponent = linearLagrangeMeshComponent
+elif (pressureInterpolation == QUADRATIC_LAGRANGE):
+    pressureMeshComponent = quadraticLagrangeMeshComponent
+
+fittingMeshComponent = 0    
+if (fittingInterpolation == LINEAR_LAGRANGE):
+    fittingMeshComponent = linearLagrangeMeshComponent
+elif (fittingInterpolation == QUADRATIC_LAGRANGE):
+    fittingMeshComponent = quadraticLagrangeMeshComponent
+elif (fittingInterpolation == CUBIC_LAGRANGE):
+    fittingMeshComponent = cubicLagrangeMeshComponent
+elif (fittingInterpolation == CUBIC_HERMITE):
+    fittingMeshComponent = cubicHermiteMeshComponent
 # Start the creation of a generated mesh in the region
 generatedMesh = iron.GeneratedMesh()
 generatedMesh.CreateStart(generatedMeshUserNumber,region)
-generatedMesh.type = iron.GeneratedMeshTypes.REGULAR
-generatedMesh.basis = [quadraticBasis,linearBasis]
-generatedMesh.extent = [width,height,length]
-generatedMesh.numberOfElements = [numberOfGlobalXElements,numberOfGlobalYElements,numberOfGlobalZElements]
+generatedMesh.TypeSet(iron.GeneratedMeshTypes.REGULAR)
+                      
+if (haveLinearLagrange):
+    if (haveQuadraticLagrange):
+        if (haveCubicLagrange):
+            if (haveCubicHermite):
+                generatedMesh.BasisSet([linearLagrangeBasis,quadraticLagrangeBasis,cubicLagrangeBasis,cubicHermiteBasis])
+            else:
+                generatedMesh.BasisSet([linearLagrangeBasis,quadraticLagrangeBasis,cubicLagrangeBasis])
+        else:
+            if (haveCubicHermite):
+                generatedMesh.BasisSet([linearLagrangeBasis,quadraticLagrangeBasis,cubicHermiteBasis])
+            else:
+                generatedMesh.BasisSet([linearLagrangeBasis,quadraticLagrangeBasis])
+    else:
+        if (haveCubicLagrange):
+            if (haveCubicHermite):
+                generatedMesh.BasisSet([linearLagrangeBasis,cubicLagrangeBasis,cubicHermiteBasis])
+            else:
+                generatedMesh.BasisSet([linearLagrangeBasis,cubicLagrangeBasis])
+        else:
+            if (haveCubicHermite):
+                generatedMesh.BasisSet([linearLagrangeBasis,cubicHermiteBasis])
+            else:
+                generatedMesh.BasisSet([linearLagrangeBasis])
+else:
+    if (haveQuadraticLagrange):
+        if (haveCubicLagrange):
+            if (haveCubicHermite):
+                generatedMesh.BasisSet([quadraticLagrangeBasis,cubicLagrangeBasis,cubicHermiteBasis])
+            else:
+                generatedMesh.BasisSet([quadraticLagrangeBasis,cubicLagrangeBasis])
+        else:
+            if (haveCubicHermite):
+                generatedMesh.BasisSet([quadraticLagrangeBasis,cubicHermiteBasis])
+            else:
+                generatedMesh.BasisSet([quadraticLagrangeBasis])
+    else:
+        if (haveCubicLagrange):
+            if (haveCubicHermiteBasi):
+                generatedMesh.BasisSet([cubicLagrangeBasis,cubicHermiteBasis])
+            else:
+                generatedMesh.BasisSet([cubicLagrangeBasis])
+        else:
+            if (haveCubicHermite):
+                generatedMesh.BasisSet([cubicHermiteBasis])
+            else:
+                sys.exit('No basis functions have been used')
+                      
+generatedMesh.ExtentSet([width,height,length])
+generatedMesh.NumberOfElementsSet([numberOfGlobalXElements,numberOfGlobalYElements,numberOfGlobalZElements])
 # Finish the creation of a generated mesh in the region
 mesh = iron.Mesh()
 generatedMesh.CreateFinish(meshUserNumber,mesh)
@@ -174,9 +366,11 @@ generatedMesh.CreateFinish(meshUserNumber,mesh)
 # Create a decomposition for the mesh
 decomposition = iron.Decomposition()
 decomposition.CreateStart(decompositionUserNumber,mesh)
-decomposition.type = iron.DecompositionTypes.CALCULATED
-decomposition.numberOfDomains = numberOfComputationalNodes
+decomposition.TypeSet(iron.DecompositionTypes.CALCULATED)
+decomposition.NumberOfDomainsSet(numberOfComputationalNodes)
 decomposition.CreateFinish()
+
+print("Geometric mesh component = %d" % geometricMeshComponent)
 
 # Create a field for the geometry
 geometricField = iron.Field()
@@ -184,9 +378,9 @@ geometricField.CreateStart(geometricFieldUserNumber,region)
 geometricField.MeshDecompositionSet(decomposition)
 geometricField.TypeSet(iron.FieldTypes.GEOMETRIC)
 geometricField.VariableLabelSet(iron.FieldVariableTypes.U,"Geometry")
-geometricField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,1)
-geometricField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,1)
-geometricField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,1)
+geometricField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,geometricMeshComponent)
+geometricField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,geometricMeshComponent)
+geometricField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,geometricMeshComponent)
 geometricField.CreateFinish()
 
 # Update the geometric field parameters from generated mesh
@@ -199,9 +393,9 @@ fibreField.TypeSet(iron.FieldTypes.FIBRE)
 fibreField.MeshDecompositionSet(decomposition)
 fibreField.GeometricFieldSet(geometricField)
 fibreField.VariableLabelSet(iron.FieldVariableTypes.U,"Fibre")
-fibreField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,2)
-fibreField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,2)
-fibreField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,2)
+fibreField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,fibreMeshComponent)
+fibreField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,fibreMeshComponent)
+fibreField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,fibreMeshComponent)
 fibreField.CreateFinish()
 
 # Create the elasticity equations_set
@@ -210,9 +404,9 @@ elasticityEquationsSet = iron.EquationsSet()
 elasticityEquationsSetSpecification = [iron.EquationsSetClasses.ELASTICITY,
                                        iron.EquationsSetTypes.FINITE_ELASTICITY,
                                        iron.EquationsSetSubtypes.MOONEY_RIVLIN]
-elasticityEquationsSet.CreateStart(elasticityEquationsSetUserNumber,region,fibreField,
-                         elasticityEquationsSetSpecification,elasticityEquationsSetFieldUserNumber,
-                         elasticityEquationsSetField)
+elasticityEquationsSet.CreateStart(elasticityEquationsSetUserNumber,region,fibreField, \
+                                   elasticityEquationsSetSpecification,elasticityEquationsSetFieldUserNumber, \
+                                   elasticityEquationsSetField)
 elasticityEquationsSet.CreateFinish()
 
 # Create the dependent field
@@ -220,11 +414,25 @@ elasticityDependentField = iron.Field()
 elasticityEquationsSet.DependentCreateStart(elasticityDependentFieldUserNumber,elasticityDependentField)
 elasticityDependentField.VariableLabelSet(iron.FieldVariableTypes.U,"ElasticityDependent")
 elasticityDependentField.VariableLabelSet(iron.FieldVariableTypes.DELUDELN,"ElasticityTraction")
+elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,geometricMeshComponent)
+elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,1,geometricMeshComponent)
+elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,geometricMeshComponent)
+elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,2,geometricMeshComponent)
+elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,geometricMeshComponent)
+elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,3,geometricMeshComponent)
 # Set the pressure to be nodally based and use the second mesh component
-elasticityDependentField.ComponentInterpolationSet(iron.FieldVariableTypes.U,4,iron.FieldInterpolationTypes.NODE_BASED)
-elasticityDependentField.ComponentInterpolationSet(iron.FieldVariableTypes.DELUDELN,4,iron.FieldInterpolationTypes.NODE_BASED)
-elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,4,2)
-elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,4,2)
+if (pressureInterpolation == ELEMENT_CONSTANT):
+    elasticityDependentField.ComponentInterpolationSet(iron.FieldVariableTypes.U,4,\
+                                                       iron.FieldInterpolationTypes.ELEMENT_BASED)
+    elasticityDependentField.ComponentInterpolationSet(iron.FieldVariableTypes.DELUDELN,4,\
+                                                       iron.FieldInterpolationTypes.ELEMENT_BASED)                
+else:
+    elasticityDependentField.ComponentInterpolationSet(iron.FieldVariableTypes.U,4,\
+                                                       iron.FieldInterpolationTypes.NODE_BASED)
+    elasticityDependentField.ComponentInterpolationSet(iron.FieldVariableTypes.DELUDELN,4,\
+                                                       iron.FieldInterpolationTypes.NODE_BASED)
+elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,4,pressureMeshComponent)
+elasticityDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,4,pressureMeshComponent)
 elasticityEquationsSet.DependentCreateFinish()
 
 # Initialise elasticity dependent field from undeformed geometry and displacement bcs and set hydrostatic pressure
@@ -253,18 +461,18 @@ elasticityStressField.VariableLabelSet(iron.FieldVariableTypes.U,"GaussStress")
 elasticityStressField.VariableLabelSet(iron.FieldVariableTypes.V,"GaussWeight")
 elasticityStressField.NumberOfComponentsSet(iron.FieldVariableTypes.U,6)
 elasticityStressField.NumberOfComponentsSet(iron.FieldVariableTypes.V,6)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,4,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,5,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,6,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,1,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,2,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,3,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,4,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,5,1)
-elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,6,1)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,4,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,5,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,6,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,1,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,2,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,3,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,4,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,5,fittingMeshComponent)
+elasticityStressField.ComponentMeshComponentSet(iron.FieldVariableTypes.V,6,fittingMeshComponent)
 elasticityStressField.ComponentInterpolationSet(iron.FieldVariableTypes.U,1,iron.FieldInterpolationTypes.GAUSS_POINT_BASED)
 elasticityStressField.ComponentInterpolationSet(iron.FieldVariableTypes.U,2,iron.FieldInterpolationTypes.GAUSS_POINT_BASED)
 elasticityStressField.ComponentInterpolationSet(iron.FieldVariableTypes.U,3,iron.FieldInterpolationTypes.GAUSS_POINT_BASED)
@@ -326,18 +534,18 @@ fittingDependentField.VariableLabelSet(iron.FieldVariableTypes.U,"FittedStress")
 fittingDependentField.NumberOfComponentsSet(iron.FieldVariableTypes.U,6)
 fittingDependentField.NumberOfComponentsSet(iron.FieldVariableTypes.DELUDELN,6)
 # Set the field variables to be triquadratic Lagrange
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,4,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,5,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,6,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,1,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,2,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,3,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,4,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,5,1)
-fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,6,1)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,1,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,2,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,3,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,4,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,5,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.U,6,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,1,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,2,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,3,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,4,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,5,fittingMeshComponent)
+fittingDependentField.ComponentMeshComponentSet(iron.FieldVariableTypes.DELUDELN,6,fittingMeshComponent)
 # Finish creating the fitting dependent field
 fittingEquationsSet.DependentCreateFinish()
 
@@ -367,9 +575,9 @@ fittingMaterialField.ComponentValuesInitialiseDP(iron.FieldVariableTypes.U,iron.
 fittingEquations = iron.Equations()
 fittingEquationsSet.EquationsCreateStart(fittingEquations)
 # Set the fitting equations sparsity type
-fittingEquations.sparsityType = iron.EquationsSparsityTypes.SPARSE
+fittingEquations.SparsityTypeSet(iron.EquationsSparsityTypes.SPARSE)
 # Set the fitting equations output type to none
-fittingEquations.outputType = iron.EquationsOutputTypes.NONE
+fittingEquations.OutputTypeSet(iron.EquationsOutputTypes.NONE)
 # Finish creating the fitting equations
 fittingEquationsSet.EquationsCreateFinish()
 
@@ -393,7 +601,7 @@ elasticityNonLinearSolver = iron.Solver()
 elasticityLinearSolver = iron.Solver()
 elasticityProblem.SolversCreateStart()
 elasticityProblem.SolverGet([iron.ControlLoopIdentifiers.NODE],1,elasticityNonLinearSolver)
-elasticityNonLinearSolver.outputType = iron.SolverOutputTypes.MONITOR
+elasticityNonLinearSolver.OutputTypeSet(iron.SolverOutputTypes.MONITOR)
 #elasticityNonLinearSolver.outputType = iron.SolverOutputTypes.PROGRESS
 #elasticityNonLinearSolver.outputType = iron.SolverOutputTypes.MATRIX
 elasticityNonLinearSolver.NewtonJacobianCalculationTypeSet(iron.JacobianCalculationTypes.FD)
@@ -401,7 +609,7 @@ elasticityNonLinearSolver.NewtonAbsoluteToleranceSet(1e-14)
 elasticityNonLinearSolver.NewtonSolutionToleranceSet(1e-14)
 elasticityNonLinearSolver.NewtonRelativeToleranceSet(1e-14)
 elasticityNonLinearSolver.NewtonLinearSolverGet(elasticityLinearSolver)
-#elasticityLinearSolver.linearType = iron.LinearSolverTypes.DIRECT
+elasticityLinearSolver.linearType = iron.LinearSolverTypes.DIRECT
 elasticityProblem.SolversCreateFinish()
 
 # Create elasticity solver equations and add elasticity equations set to solver equations
@@ -419,7 +627,7 @@ elasticitySolverEquations.BoundaryConditionsCreateStart(elasticityBoundaryCondit
 for widthNodeIdx in range(1,numberOfXNodes+1):
     for heightNodeIdx in range(1,numberOfYNodes+1):
         # Set left hand build in nodes ot no displacement
-        nodeIdx=widthNodeIdx+(heightNodeIdx-1)*numberOfXNodes
+        nodeIdx=widthNodeIdx+(heightNodeIdx-1)*numberOfXNodes        
         elasticityBoundaryConditions.AddNode(elasticityDependentField,iron.FieldVariableTypes.U,1,1,nodeIdx,1,
                                              iron.BoundaryConditionsTypes.FIXED,0.0)
         elasticityBoundaryConditions.AddNode(elasticityDependentField,iron.FieldVariableTypes.U,1,1,nodeIdx,2,
@@ -429,12 +637,16 @@ for widthNodeIdx in range(1,numberOfXNodes+1):
         print("Wall node number = %d" % (nodeIdx))
     # Set downward force on right-hand edge
     nodeIdx=numberOfNodes-widthNodeIdx+1
-    elasticityBoundaryConditions.AddNode(elasticityDependentField,iron.FieldVariableTypes.DELUDELN,1,1,nodeIdx,2,
+    elasticityBoundaryConditions.SetNode(elasticityDependentField,iron.FieldVariableTypes.DELUDELN,1,1,nodeIdx,2,
                                          iron.BoundaryConditionsTypes.NEUMANN_POINT,force)
     print("Force node number = %d" % (nodeIdx))
 # Set reference pressure
-elasticityBoundaryConditions.AddNode(elasticityDependentField,iron.FieldVariableTypes.U,1,1,numberOfNodes,4,
-                                     iron.BoundaryConditionsTypes.FIXED,pRef)
+if (pressureInterpolation == ELEMENT_CONSTANT):
+    elasticityBoundaryConditions.SetElement(elasticityDependentField,iron.FieldVariableTypes.U,numberOfElements,4,
+                                            iron.BoundaryConditionsTypes.FIXED,pRef)
+else:
+    elasticityBoundaryConditions.SetNode(elasticityDependentField,iron.FieldVariableTypes.U,1,1,numberOfNodes,4,
+                                         iron.BoundaryConditionsTypes.FIXED,pRef)
 
 elasticitySolverEquations.BoundaryConditionsCreateFinish()
 
