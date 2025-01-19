@@ -406,7 +406,7 @@ elasticityProblem.SolverGet([oc.ControlLoopIdentifiers.NODE],1,elasticityNonLine
 elasticityNonLinearSolver.outputType = oc.SolverOutputTypes.MONITOR
 #elasticityNonLinearSolver.outputType = oc.SolverOutputTypes.PROGRESS
 #elasticityNonLinearSolver.outputType = oc.SolverOutputTypes.MATRIX
-elasticityNonLinearSolver.NewtonJacobianCalculationTypeSet(oc.JacobianCalculationTypes.FD)
+elasticityNonLinearSolver.NewtonJacobianCalculationTypeSet(oc.JacobianCalculationTypes.EQUATIONS)
 elasticityNonLinearSolver.NewtonAbsoluteToleranceSet(1e-14)
 elasticityNonLinearSolver.NewtonSolutionToleranceSet(1e-14)
 elasticityNonLinearSolver.NewtonRelativeToleranceSet(1e-14)
